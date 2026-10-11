@@ -17,6 +17,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Generate Gradle Wrapper
+        run: |
+          cd android
+          gradle wrapper --gradle-version 8.5
+
       - name: Bundle Android Assets
         run: |
           mkdir -p android/app/src/main/assets/gateway
@@ -25,7 +30,7 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          gradle assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
           mkdir -p ../dist
           cp app/build/outputs/apk/debug/*.apk ../dist/AntigravityGateway-Debug.apk
 
