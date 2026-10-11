@@ -27,17 +27,21 @@ jobs:
         with:
           gradle-version: 8.5
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools-version: "34.0.0"
+          accept-android-sdk-licences: true
+
       - name: Bundle Android Assets
         run: |
           mkdir -p android/app/src/main/assets/gateway
           cp -r src android/app/src/main/assets/gateway/
 
       - name: Build Android APK
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
           cd android
-          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           gradle assembleDebug --no-daemon --stacktrace
           mkdir -p ../dist
           cp app/build/outputs/apk/debug/*.apk ../dist/AntigravityGateway-Debug.apk
