@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Antigravity Gateway Pro · 智能控制台</title>
+<style>
+  :root {
+    --bg: #090d16;
+    --card: #131c2e;
+    --card-hover: #1a263e;
+    --border: #23324d;
+    --text: #f1f5f9;
+    --sub: #8295b3;
+    --primary: #38bdf8;
+    --primary-glow: rgba(56, 189, 248, 0.2);
+    --accent: #818cf8;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text); padding: 12px 10px 100px; min-height: 100vh; overflow-x: hidden; line-height: 1.5; }
+  .container { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+
+  /* 顶部导航：支持窄屏自动两行换行，杜绝字体重叠遮挡 */
+  header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; font-weight: 700; color: #fff; letter-spacing: -0.3px; min-width: 0; }
+  .brand-icon { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .brand-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  .badge { font-size: 0.72rem; padding: 3px 8px; border-radius: 999px; background: rgba(16, 185, 129, 0.12); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); display: inline-flex; align-items: center; gap: 4px; font-weight: 500; white-space: nowrap; }
+  .badge.warn { background: rgba(245, 158, 11, 0.12); color: var(--warning); border-color: rgba(245, 158, 11, 0.3); }
+  .badge.danger { background: rgba(239, 68, 68, 0.12); color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
+  .badge.blue { background: rgba(56, 189, 248, 0.12); color: var(--primary); border-color: rgba(56, 189, 248, 0.3); }
+
+  /* 四大核心数据看板 */
+  .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  @media(min-width: 560px) { .metrics-grid { grid-template-columns: repeat(4, 1fr); gap: 10px; } }
+  .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 10px; position: relative; overflow: hidden; }
+  .metric-label { font-size: 0.72rem; color: var(--sub); display: flex; justify-content: space-between; align-items: center; white-space: nowrap; }
+  .metric-val { font-size: 1.18rem; font-weight: 700; color: #fff; margin-top: 5px; font-feature-settings: "tnum"; word-break: break-all; }
+  .metric-sub { font-size: 0.68rem; color: var(--sub); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 分段式导航控制器 */
+  .nav-tabs { display: flex; background: #0c1424; padding: 4px; border-radius: 10px; border: 1px solid var(--border); gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { flex: 1; min-width: 72px; text-align: center; padding: 8px 8px; font-size: 0.78rem; font-weight: 600; color: var(--sub); border: none; background: transparent; border-radius: 7px; cursor: pointer; transition: all .15s; white-space: nowrap; user-select: none; }
+  .tab-btn.active { background: var(--card-hover); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 1px solid rgba(56, 189, 248, 0.25); }
+
+  /* 基础卡片 */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .card-title { font-size: 0.92rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+
+  /* 配额卡片组件 */
+  .quota-group { display: flex; flex-direction: column; gap: 8px; background: #0c1424; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.04); }
+  .quota-group-title { font-size: 0.82rem; font-weight: 600; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
+  .progress-bg { height: 8px; background: #070c17; border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); border-radius: 999px; width: 0%; transition: width .5s cubic-bezier(0.4, 0, 0.2, 1); }
+  .quota-meta { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--sub); }
+
+  /* 趋势图表区 */
+  .chart-container { width: 100%; height: 160px; background: #070c17; border: 1px solid var(--border); border-radius: 8px; position: relative; padding: 8px 4px 4px 4px; }
+  canvas { width: 100% !important; height: 100% !important; }
+
+  /* 按钮系统 */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--primary); color: #0a1120; border: none; border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all .15s; user-select: none; }
+  .btn:active { transform: scale(0.98); }
+  .btn:hover { filter: brightness(1.1); }
+  .btn-outline { background: transparent; color: var(--primary); border: 1px solid rgba(56, 189, 248, 0.35); padding: 4px 9px; font-size: 0.74rem; border-radius: 6px; flex-shrink: 0; }
+  .btn-outline:hover { background: var(--primary-glow); }
+  .btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); padding: 4px 8px; font-size: 0.72rem; border-radius: 6px; flex-shrink: 0; }
+  .btn-success { background: var(--success); color: #fff; }
+
+  /* 账号抽屉列表 */
+  .account-item { display: flex; justify-content: space-between; align-items: center; background: #0c1424; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 8px; gap: 8px; }
+  .account-item.active { border-color: var(--primary); background: rgba(56, 189, 248, 0.05); }
+
+  /* 运行日志终端 */
+  .console-panel { background: #050811; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.72rem; color: #94a3b8; max-height: 220px; overflow-y: auto; line-height: 1.6; }
+  .log-entry { margin-bottom: 4px; border-bottom: 1px dashed rgba(255,255,255,0.04); padding-bottom: 3px; display: flex; gap: 6px; flex-wrap: wrap; word-break: break-all; }
+  .log-entry .time { color: var(--sub); }
+  .log-entry .model { color: var(--primary); font-weight: 600; }
+  .log-entry .status { color: var(--success); font-weight: 600; }
+  .log-entry .status.err { color: var(--danger); }
+
+  /* 复制与代码卡片：安全 Flex 布局，杜绝按钮压住文字 */
+  .copyable { background: #070c17; padding: 8px 10px; border-radius: 8px; font-family: monospace; font-size: 0.75rem; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .copyable-text { min-width: 0; flex: 1; word-break: break-all; overflow-wrap: anywhere; line-height: 1.4; }
+  .code-block { background: #050811; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 0.73rem; color: #7dd3fc; overflow-x: auto; line-height: 1.5; white-space: pre; }
+
+  /* 悬浮 Toast 消息：位于顶部安全区，杜绝阻挡点击 */
+  #toast { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 8px 16px; border-radius: 999px; font-size: 0.8rem; font-weight: 500; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 9999; display: none; align-items: center; gap: 6px; max-width: 90%; text-align: center; }
+  #toast.show { display: flex; animation: toastIn .2s; }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+  .test-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; margin-top: 6px; }
+  .test-table th { text-align: left; padding: 6px; color: var(--sub); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .test-table td { padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+</style>
+</head>
+<body>
+<div id="toast">✅ 提示消息</div>
+
+<div class="container">
+  <!-- 头部状态栏 -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">Antigravity Pro</div>
+    </div>
+    <div class="header-actions">
+      <a href="/download" class="btn btn-outline" style="color:var(--primary);text-decoration:none;" target="_blank">📥 APK</a>
+      <button class="btn btn-outline" id="btn-toggle-accounts">👤 <span id="current-active-account-btn">账号管理</span> ▾</button>
+      <span class="badge" id="service-status">● 运行中</span>
+    </div>
+  </header>
+
+  <!-- 顶部四大核心数据指标 -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label"><span>今日调用</span><span id="stat-req-badge">24H</span></div>
+      <div class="metric-val" id="m-total-reqs">0 次</div>
+      <div class="metric-sub" id="m-sub-reqs">流式响应正常</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><span>消耗 Token</span><span style="color:var(--primary);">Σ</span></div>
+      <div class="metric-val" id="m-total-tokens">0</div>
+      <div class="metric-sub" id="m-sub-tokens">↑0 · ↓0</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><span>响应延迟</span><span style="color:var(--success);">TTFT</span></div>
+      <div class="metric-val" id="m-avg-latency" style="color:var(--success);">-- ms</div>
+      <div class="metric-sub">Google 高速通道</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><span>缓存节约</span><span style="color:var(--accent);">Cache</span></div>
+      <div class="metric-val" id="m-cached-tokens" style="color:var(--accent);">0</div>
+      <div class="metric-sub">Prompt Cache 命中</div>
+    </div>
+  </div>
+
+  <!-- 多账号抽屉展开区 (默认折叠) -->
+  <div id="accounts-drawer" class="card" style="display:none; border-color:var(--primary);">
+    <div class="card-title">
+      <span>👥 多账号池负载均衡 (支持多号轮换)</span>
+      <button class="btn btn-outline" id="btn-open-add-dialog">➕ 添加账号</button>
+    </div>
+    <div id="accounts-list-container">
+      <div style="font-size:0.75rem;color:var(--sub);text-align:center;padding:6px;">加载账号中...</div>
+    </div>
+    
+    <!-- 授权表单 -->
+    <div id="account-auth-form" style="display:none; border-top:1px dashed var(--border); padding-top:10px;">
+      <div style="font-size:0.75rem;color:var(--sub);margin-bottom:8px;">
+        1. 点击链接登录新账号授权；2. 跳转后复制浏览器整串网址回贴提交：
+      </div>
+      <div class="copyable" style="margin-bottom:8px;">
+        <span class="copyable-text" id="display-auth-url" style="color:var(--primary);font-size:0.72rem;">正在获取官方授权链接...</span>
+        <button class="btn btn-outline" id="btn-copy-auth">复制</button>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <a class="btn" id="link-go-google" href="#" target="_blank" style="flex:1;text-decoration:none;">🔗 打开浏览器授权</a>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px;">
+        <input type="text" id="input-callback-url" placeholder="粘贴带有 code= 的完整回调网址" style="flex:1;background:#070c17;border:1px solid var(--border);border-radius:6px;padding:8px;color:#fff;font-size:0.78rem;outline:none;min-width:0;">
+        <button class="btn btn-success" id="btn-submit-code" style="flex-shrink:0;">激活</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 核心分段控制器 (Segmented Tabs) -->
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('quota')">📊 配额</button>
+    <button class="tab-btn" onclick="switchTab('stats')">📈 趋势</button>
+    <button class="tab-btn" onclick="switchTab('test')">🧪 测速</button>
+    <button class="tab-btn" onclick="switchTab('agent')">📱 配置</button>
+    <button class="tab-btn" onclick="switchTab('logs')">📜 日志</button>
+  </div>
+
+  <!-- 选项卡 1：实时配额 (Quota) -->
+  <div id="tab-pane-quota" class="card">
+    <div class="card-title">
+      <span>📊 Google Cloud Code 实时配额</span>
+      <button class="btn btn-outline" id="btn-refresh-quota">🔄 刷新</button>
+    </div>
+
+    <!-- Gemini 配额组 -->
+    <div class="quota-group">
+      <div class="quota-group-title">
+        <span>🤖 Gemini 模型组 (Flash / Pro)</span>
+        <span class="badge" id="gemini-status-badge">76% 充足</span>
+      </div>
+      <div class="quota-meta">
+        <span>5小时滚动可用量</span>
+        <span id="q-gemini-5h-text">--%</span>
+      </div>
+      <div class="progress-bg"><div class="progress-fill" id="q-gemini-5h-fill"></div></div>
+      <div class="quota-meta">
+        <span id="q-gemini-5h-reset">重置: 计算中...</span>
+        <span>窗口额度: 动态自适应</span>
+      </div>
+    </div>
+
+    <!-- Claude 3P 配额组 -->
+    <div class="quota-group">
+      <div class="quota-group-title">
+        <span>🎭 Claude 3P 模型组 (Sonnet / Opus)</span>
+        <span class="badge blue" id="claude-status-badge">100% 满额</span>
+      </div>
+      <div class="quota-meta">
+        <span>5小时滚动可用量</span>
+        <span id="q-claude-5h-text">--%</span>
+      </div>
+      <div class="progress-bg"><div class="progress-fill" id="q-claude-5h-fill"></div></div>
+      <div class="quota-meta">
+        <span id="q-claude-5h-reset">重置: 计算中...</span>
+        <span>高优专线分配</span>
+      </div>
+    </div>
+
+    <div style="font-size:0.72rem;color:var(--sub);display:flex;justify-content:space-between;padding-top:2px;">
+      <span>主控: <b id="quota-email-label" style="color:#fff;">--</b></span>
+      <span id="quota-sync-time">同步: --</span>
+    </div>
+  </div>
+
+  <!-- 选项卡 2：用量统计与消耗趋势 (Stats & Trends) -->
+  <div id="tab-pane-stats" class="card" style="display:none;">
+    <div class="card-title">
+      <span>📈 Token 消耗与请求频次趋势</span>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-outline" id="btn-trend-24h" onclick="loadTrend('24h')">24小时</button>
+        <button class="btn btn-outline" id="btn-trend-7d" onclick="loadTrend('7d')">7天</button>
+      </div>
+    </div>
+    
+    <div class="chart-container">
+      <canvas id="trendCanvas"></canvas>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:4px;">
+      <div style="background:#0c1424;padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:0.7rem;color:var(--sub);">输入 Tokens (Prompt)</div>
+        <div style="font-size:1.05rem;font-weight:700;color:#fff;margin-top:2px;" id="stat-detail-in">0</div>
+      </div>
+      <div style="background:#0c1424;padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:0.7rem;color:var(--sub);">输出 Tokens (Completion)</div>
+        <div style="font-size:1.05rem;font-weight:700;color:var(--primary);margin-top:2px;" id="stat-detail-out">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 选项卡 3：通道连通性测试 (Connectivity Test) -->
+  <div id="tab-pane-test" class="card" style="display:none;">
+    <div class="card-title">
+      <span>🧪 模型出字与深度思考测试</span>
+      <button class="btn btn-success" id="btn-run-tests">▶ 一键测试</button>
+    </div>
+    <table class="test-table" id="test-table">
+      <thead>
+        <tr>
+          <th>模型</th>
+          <th>状态</th>
+          <th>延迟</th>
+          <th>出字与思考效果</th>
+        </tr>
+      </thead>
+      <tbody id="test-body">
+        <tr><td colspan="4" style="text-align:center;color:var(--sub);">点击上方按钮启动测试</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 选项卡 4：Agent 客户端集成 (Client Integration) -->
+  <div id="tab-pane-agent" class="card" style="display:none;">
+    <div class="card-title">📱 客户端连接配置 (已适配当前域名)</div>
+    
+    <label style="font-size:0.74rem;color:var(--sub);">API 基础地址 (Base URL):</label>
+    <div class="copyable">
+      <span class="copyable-text" style="color:var(--primary);font-weight:600;" id="cfg-display-url">http://127.0.0.1:8790</span>
+      <button class="btn btn-outline" onclick="copyValue(document.getElementById('cfg-display-url').textContent)">复制</button>
+    </div>
+
+    <label style="font-size:0.74rem;color:var(--sub);margin-top:4px;">API 密钥 (API Key):</label>
+    <div class="copyable">
+      <span class="copyable-text" id="cfg-key-display" style="color:#fff;font-weight:600;">antigravity-local</span>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-outline" onclick="generateRandomApiKey()">🎲 生成新 Key</button>
+        <button class="btn btn-outline" onclick="copyValue(document.getElementById('cfg-key-display').textContent)">复制</button>
+      </div>
+    </div>
+
+    <label style="font-size:0.74rem;color:var(--sub);margin-top:4px;">Claude Code 终端快速启动命令:</label>
+    <div class="code-block" id="cmd-claude-code">export ANTHROPIC_BASE_URL="http://127.0.0.1:8790"
+export ANTHROPIC_API_KEY="antigravity-local"
+claude</div>
+    <button class="btn btn-outline" style="align-self:flex-start;" onclick="copyValue(document.getElementById('cmd-claude-code').textContent)">📋 复制环境变量命令</button>
+
+    <label style="font-size:0.74rem;color:var(--sub);margin-top:4px;">Pi / Pi-Web models.json 配置片段:</label>
+    <div class="code-block">{
+  "providers": {
+    "antigravity": {
+      "api": "anthropic-messages",
+      "baseUrl": "http://127.0.0.1:8790",
+      "apiKey": "antigravity-local",
+      "models": [
+        { "id": "gemini-3.8-flash-high", "reasoning": true },
+        { "id": "gemini-3.8-flash-fast" },
+        { "id": "claude-sonnet-4-6" }
+      ]
+    }
+  }
+}</div>
+  </div>
+
+  <!-- 选项卡 5：运行日志追踪 (Logs) -->
+  <div id="tab-pane-logs" class="card" style="display:none;">
+    <div class="card-title">
+      <span>📜 实时运行日志 (Live Log Console)</span>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-outline" id="btn-copy-logs">复制日志</button>
+        <button class="btn btn-outline" id="btn-clear-logs">清空</button>
+      </div>
+    </div>
+    <div class="console-panel" id="console-logs">
+      <div style="color:var(--sub);">等待客户端请求发起...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showToast(msg, isErr = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = isErr ? 'var(--danger)' : 'var(--success)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function copyValue(val) {
+  const area = document.createElement('textarea');
+  area.value = val;
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand('copy');
+  document.body.removeChild(area);
+  showToast('📋 已复制！');
+}
+
+function generateRandomApiKey() {
+  const randomStr = 'ag_' + Math.random().toString(36).substring(2, 8) + Math.random().toString(36).substring(2, 8);
+  document.getElementById('cfg-key-display').textContent = randomStr;
+  showToast('🔑 已生成新密钥: ' + randomStr);
+}
+
+function switchTab(tabId) {
+  const tabs = ['quota', 'stats', 'test', 'agent', 'logs'];
+  tabs.forEach(t => {
+    const pane = document.getElementById('tab-pane-' + t);
+    if (pane) pane.style.display = (t === tabId) ? 'flex' : 'none';
+  });
+
+  const buttons = document.querySelectorAll('.nav-tabs .tab-btn');
+  buttons.forEach((btn, idx) => {
+    btn.classList.toggle('active', tabs[idx] === tabId);
+  });
+
+  if (tabId === 'stats') {
+    loadTrend('24h');
+  }
+}
+
+document.getElementById('btn-toggle-accounts').onclick = () => {
+  const d = document.getElementById('accounts-drawer');
+  d.style.display = d.style.display === 'none' ? 'flex' : 'none';
+};
+
+document.getElementById('btn-open-add-dialog').onclick = async () => {
+  const form = document.getElementById('account-auth-form');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  if (form.style.display === 'block') {
+    const res = await fetch('/api/gemini/auth', { method: 'POST' });
+    const data = await res.json();
+    if (data.auth_url) {
+      document.getElementById('display-auth-url').textContent = data.auth_url;
+      document.getElementById('link-go-google').href = data.auth_url;
+    }
+  }
+};
+
+document.getElementById('btn-copy-auth').onclick = () => {
+  copyValue(document.getElementById('display-auth-url').textContent);
+};
+
+document.getElementById('btn-submit-code').onclick = async () => {
+  const input = document.getElementById('input-callback-url').value.trim();
+  if (!input) return showToast('请先粘贴回调网址', true);
+  try {
+    const res = await fetch('/api/oauth/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code_or_url: input })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      showToast('🎉 ' + d.message);
+      document.getElementById('account-auth-form').style.display = 'none';
+      loadStatus();
+      loadQuota();
+    } else {
+      showToast('❌ ' + d.error, true);
+    }
+  } catch (e) {
+    showToast('提交失败: ' + e.message, true);
+  }
+};
+
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/status?_t=' + Date.now());
+    const data = await res.json();
+
+    const currentHost = window.location.origin;
+    document.getElementById('cfg-display-url').textContent = currentHost;
+    document.getElementById('cmd-claude-code').textContent = 
+`export ANTHROPIC_BASE_URL="${currentHost}"
+export ANTHROPIC_API_KEY="antigravity-local"
+claude`;
+
+    if (data.active_account) {
+      document.getElementById('current-active-account-btn').textContent = data.active_account.email.split('@')[0];
+      document.getElementById('quota-email-label').textContent = data.active_account.email;
+    }
+
+    renderAccountsList(data.accounts || [], data.active_account?.email);
+
+    if (data.stats) {
+      document.getElementById('m-total-reqs').textContent = data.stats.total_requests + ' 次';
+      document.getElementById('m-total-tokens').textContent = data.stats.total_tokens.toLocaleString();
+      document.getElementById('m-avg-latency').textContent = data.stats.avg_latency_ms ? data.stats.avg_latency_ms + ' ms' : '-- ms';
+      document.getElementById('m-cached-tokens').textContent = data.stats.cached_tokens.toLocaleString();
+      document.getElementById('m-sub-tokens').textContent = `↑${data.stats.input_tokens.toLocaleString()} · ↓${data.stats.output_tokens.toLocaleString()}`;
+
+      document.getElementById('stat-detail-in').textContent = data.stats.input_tokens.toLocaleString();
+      document.getElementById('stat-detail-out').textContent = data.stats.output_tokens.toLocaleString();
+    }
+  } catch (e) {}
+}
+
+function renderAccountsList(accounts, activeEmail) {
+  const c = document.getElementById('accounts-list-container');
+  if (!accounts || accounts.length === 0) {
+    c.innerHTML = '<div style="color:var(--sub);font-size:0.75rem;text-align:center;padding:6px;">账号池暂无账号</div>';
+    return;
+  }
+  c.innerHTML = '';
+  accounts.forEach(acc => {
+    const isActive = acc.email === activeEmail;
+    const div = document.createElement('div');
+    div.className = 'account-item' + (isActive ? ' active' : '');
+    div.innerHTML = `
+      <div style="min-width:0;flex:1;">
+        <div style="font-weight:600;font-size:0.8rem;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${acc.email} ${isActive ? '<span class="badge">主控</span>' : ''}</div>
+        <div style="font-size:0.68rem;color:var(--sub);margin-top:2px;">Google 沙箱直连 · 自动续期</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        ${!isActive ? `<button class="btn btn-outline" onclick="switchAcc('${acc.email}')">切换</button>` : ''}
+        <button class="btn btn-danger" onclick="removeAcc('${acc.email}')">移除</button>
+      </div>
+    `;
+    c.appendChild(div);
+  });
+}
+
+async function switchAcc(email) {
+  await fetch('/api/accounts/switch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  showToast('已切换至账号 ' + email);
+  loadStatus();
+  loadQuota();
+}
+
+async function removeAcc(email) {
+  if (!confirm('确定移除 ' + email + ' 吗？')) return;
+  await fetch('/api/accounts/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  showToast('已移除账号');
+  loadStatus();
+  loadQuota();
+}
+
+async function loadQuota() {
+  const btn = document.getElementById('btn-refresh-quota');
+  btn.textContent = '🔄 同步中...';
+  try {
+    const res = await fetch('/api/gemini/quota?_t=' + Date.now());
+    const data = await res.json();
+    if (data.ok) {
+      const g5 = data.five_hour?.percentage ?? 76;
+      document.getElementById('q-gemini-5h-text').textContent = g5 + '%';
+      document.getElementById('q-gemini-5h-fill').style.width = g5 + '%';
+      document.getElementById('gemini-status-badge').textContent = g5 + '% 充足';
+      if (data.five_hour?.reset_time) {
+        document.getElementById('q-gemini-5h-reset').textContent = '重置: ' + new Date(data.five_hour.reset_time).toLocaleTimeString();
+      }
+
+      const c5 = data.claude_five_hour?.percentage ?? 100;
+      document.getElementById('q-claude-5h-text').textContent = c5 + '%';
+      document.getElementById('q-claude-5h-fill').style.width = c5 + '%';
+      document.getElementById('claude-status-badge').textContent = c5 + '% 满额';
+      if (data.claude_five_hour?.reset_time) {
+        document.getElementById('q-claude-5h-reset').textContent = '重置: ' + new Date(data.claude_five_hour.reset_time).toLocaleTimeString();
+      }
+
+      document.getElementById('quota-sync-time').textContent = '同步: ' + (data.updated_time || new Date().toLocaleTimeString());
+      showToast('✅ 配额已刷新！');
+    }
+  } catch (e) {} finally {
+    btn.textContent = '🔄 刷新';
+  }
+}
+document.getElementById('btn-refresh-quota').onclick = loadQuota;
+
+async function loadTrend(mode) {
+  document.getElementById('btn-trend-24h').style.background = mode === '24h' ? 'var(--primary-glow)' : 'transparent';
+  document.getElementById('btn-trend-7d').style.background = mode === '7d' ? 'var(--primary-glow)' : 'transparent';
+
+  try {
+    const res = await fetch('/api/stats/trend?mode=' + mode + '&_t=' + Date.now());
+    const data = await res.json();
+    drawTrendChart(data.labels || [], data.tokens || [], data.requests || []);
+  } catch (e) {}
+}
+
+function drawTrendChart(labels, tokens, reqs) {
+  const cvs = document.getElementById('trendCanvas');
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = cvs.clientWidth;
+  const h = cvs.clientHeight;
+  cvs.width = w * dpr;
+  cvs.height = h * dpr;
+  ctx.scale(dpr, dpr);
+
+  ctx.clearRect(0, 0, w, h);
+  if (tokens.length === 0) return;
+
+  const maxVal = Math.max(...tokens, 10);
+  const stepX = (w - 30) / (tokens.length - 1 || 1);
+
+  ctx.beginPath();
+  tokens.forEach((val, i) => {
+    const x = 15 + i * stepX;
+    const y = h - 22 - (val / maxVal) * (h - 40);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.lineTo(15 + (tokens.length - 1) * stepX, h - 22);
+  ctx.lineTo(15, h - 22);
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+  grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '9px monospace';
+  for (let i = 0; i < labels.length; i += Math.ceil(labels.length / 5)) {
+    const x = 15 + i * stepX;
+    ctx.fillText(labels[i], x - 10, h - 6);
+  }
+}
+
+document.getElementById('btn-run-tests').onclick = async () => {
+  const btn = document.getElementById('btn-run-tests');
+  const tbody = document.getElementById('test-body');
+  btn.textContent = '⏳ 测试中...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/gemini/test', { method: 'POST' });
+    const d = await res.json();
+    tbody.innerHTML = '';
+    (d.models || []).forEach(m => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><b>${m.name}</b><br><span style="color:var(--sub);font-size:0.68rem;">${m.tag}</span></td>
+        <td><span class="badge ${m.ok ? '' : 'danger'}">${m.ok ? '🟢 正常' : '🔴 失败'}</span></td>
+        <td>${m.latency_ms} ms</td>
+        <td style="font-family:monospace;color:${m.ok ? 'var(--primary)' : 'var(--danger)'};">${m.preview}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    showToast(d.ok ? '🎉 测试通过！' : '部分通道受限', !d.ok);
+  } catch (e) {
+    showToast('测试出错: ' + e.message, true);
+  } finally {
+    btn.textContent = '▶ 一键测试';
+    btn.disabled = false;
+    loadStatus();
+    loadLogs();
+  }
+};
+
+async function loadLogs() {
+  try {
+    const res = await fetch('/api/logs?_t=' + Date.now());
+    const logs = await res.json();
+    const c = document.getElementById('console-logs');
+    if (!logs || logs.length === 0) {
+      c.innerHTML = '<div style="color:var(--sub);">等待客户端请求发起...</div>';
+      return;
+    }
+    c.innerHTML = '';
+    logs.forEach(l => {
+      const isOk = (l.status || 200) < 400;
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.innerHTML = `
+        <span class="time">[${l.time}]</span>
+        <span class="model">${l.model}</span>
+        <span class="status ${isOk ? '' : 'err'}">${l.status}</span>
+        <span>(${l.latency_ms}ms)</span>
+        <span style="color:var(--sub);">↑${l.tokens?.input||0} ↓${l.tokens?.output||0}</span>
+        ${l.is_stream ? '<span style="color:#a855f7;">[SSE]</span>' : ''}
+        ${l.error ? `<span style="color:var(--danger);">${l.error}</span>` : ''}
+      `;
+      c.appendChild(div);
+    });
+  } catch (e) {}
+}
+
+document.getElementById('btn-copy-logs').onclick = async () => {
+  const res = await fetch('/api/logs');
+  const logs = await res.json();
+  copyValue(JSON.stringify(logs, null, 2));
+};
+
+document.getElementById('btn-clear-logs').onclick = async () => {
+  await fetch('/api/logs/clear', { method: 'POST' });
+  loadLogs();
+  showToast('日志已清空');
+};
+
+loadStatus();
+loadQuota();
+loadLogs();
+setInterval(() => {
+  loadStatus();
+  loadLogs();
+}, 4000);
+</script>
+</body>
+</html>
