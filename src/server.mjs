@@ -300,17 +300,17 @@ const server = http.createServer(async (req, res) => {
     const email = url.searchParams.get('email');
     const mgr = email ? accountPool.getManager(email) : accountPool.getActiveManager();
     const quotaData = await fetchRealQuota(mgr || accountPool.getActiveManager());
-    // 老界面字段名兼容（five_hour / claude_five_hour / weekly）
+    // 老界面字段名兼容（five_hour / claude_five_hour / weekly）—— 缺数据时用 null，前端显示 '--'，严禁伪造 100%
     quotaData.five_hour = {
-      percentage: quotaData.gemini_5h?.percentage ?? 100,
+      percentage: quotaData.gemini_5h?.percentage ?? null,
       reset_time: quotaData.gemini_5h?.reset_time || null,
     };
     quotaData.claude_five_hour = {
-      percentage: quotaData.claude_5h?.percentage ?? 100,
+      percentage: quotaData.claude_5h?.percentage ?? null,
       reset_time: quotaData.claude_5h?.reset_time || null,
     };
     quotaData.weekly = {
-      percentage: quotaData.gemini_7d?.percentage ?? 100,
+      percentage: quotaData.gemini_7d?.percentage ?? null,
     };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(quotaData));

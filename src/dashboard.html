@@ -626,28 +626,29 @@ async function loadQuota() {
     const res = await fetch('/api/gemini/quota?_t=' + Date.now() + emailParam);
     const data = await res.json();
     if (data.ok) {
-      // Gemini 5h & 7d
-      const g5 = data.gemini_5h?.percentage ?? 100;
-      document.getElementById('q-gemini-5h-text').textContent = g5 + '%';
-      document.getElementById('q-gemini-5h-fill').style.width = g5 + '%';
-      document.getElementById('gemini-status-badge').textContent = g5 + '% 可用';
+      // 缺数据时百分比为 null，显示 '--'，严禁伪造 100%
+      const fmtPct = v => (v === null || typeof v === 'undefined') ? '--' : v + '%';
+      const g5 = data.gemini_5h?.percentage ?? null;
+      document.getElementById('q-gemini-5h-text').textContent = fmtPct(g5);
+      document.getElementById('q-gemini-5h-fill').style.width = (g5 === null ? 0 : g5) + '%';
+      document.getElementById('gemini-status-badge').textContent = fmtPct(g5) + (g5 === null ? ' 无数据' : ' 可用');
       document.getElementById('q-gemini-5h-reset').textContent = '重置: ' + (data.gemini_5h?.reset_text || '动态自适应');
 
-      const g7 = data.gemini_7d?.percentage ?? 100;
-      document.getElementById('q-gemini-7d-text').textContent = g7 + '%';
-      document.getElementById('q-gemini-7d-fill').style.width = g7 + '%';
+      const g7 = data.gemini_7d?.percentage ?? null;
+      document.getElementById('q-gemini-7d-text').textContent = fmtPct(g7);
+      document.getElementById('q-gemini-7d-fill').style.width = (g7 === null ? 0 : g7) + '%';
       document.getElementById('q-gemini-7d-reset').textContent = '周重置: ' + (data.gemini_7d?.reset_text || '动态自适应');
 
       // Claude 5h & 7d
-      const c5 = data.claude_5h?.percentage ?? 100;
-      document.getElementById('q-claude-5h-text').textContent = c5 + '%';
-      document.getElementById('q-claude-5h-fill').style.width = c5 + '%';
-      document.getElementById('claude-status-badge').textContent = c5 + '% 可用';
+      const c5 = data.claude_5h?.percentage ?? null;
+      document.getElementById('q-claude-5h-text').textContent = fmtPct(c5);
+      document.getElementById('q-claude-5h-fill').style.width = (c5 === null ? 0 : c5) + '%';
+      document.getElementById('claude-status-badge').textContent = fmtPct(c5) + (c5 === null ? ' 无数据' : ' 可用');
       document.getElementById('q-claude-5h-reset').textContent = '重置: ' + (data.claude_5h?.reset_text || '高优专线');
 
-      const c7 = data.claude_7d?.percentage ?? 100;
-      document.getElementById('q-claude-7d-text').textContent = c7 + '%';
-      document.getElementById('q-claude-7d-fill').style.width = c7 + '%';
+      const c7 = data.claude_7d?.percentage ?? null;
+      document.getElementById('q-claude-7d-text').textContent = fmtPct(c7);
+      document.getElementById('q-claude-7d-fill').style.width = (c7 === null ? 0 : c7) + '%';
       document.getElementById('q-claude-7d-reset').textContent = '周重置: ' + (data.claude_7d?.reset_text || '动态自适应');
 
       document.getElementById('quota-sync-time').textContent = '同步: ' + (data.updated_time || new Date().toLocaleTimeString());
