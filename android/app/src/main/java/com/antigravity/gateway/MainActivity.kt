@@ -139,6 +139,8 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
     }
+
+    private fun ensureApiKeyExists() {
         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if (sp.getString(KEY_API_KEY, null).isNullOrEmpty()) {
             val generatedKey = "ag_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12)
