@@ -1,63 +1,63 @@
 /**
- * In-Memory & Persisted Metrics with Real Token Tracking and Trends
+ * Multi-Tenant Usage & Telemetry Stats Tracker (按账号完全隔离统计)
  */
 
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STATS_FILE = path.join(__dirname, '..', 'data', 'stats.json');
 
 export class StatsTracker {
-  constructor(maxLogs = 200) {
-    this.maxLogs = maxLogs;
-    this.totalRequests = 0;
-    this.totalInputTokens = 0;
-    this.totalOutputTokens = 0;
-    this.totalCachedTokens = 0;
-    this.logs = [];
-
-    this.hourly = new Map();
-    this.daily = new Map();
-
+  constructor(storageDir) {
+    this.storageDir = storageDir;
+    this.dataFile = path.join(storageDir, 'user_stats.json');
+    this.userStats = {}; // { [email]: { totalReqs, totalTokens, inTokens, outTokens, cachedTokens, logs: [], lastLatency } }
+    this.maxLogsPerUser = 80;
+    this.ensureStorage();
     this.load();
+  }
+
+  ensureStorage() {
+    if (!fs.existsSync(this.storageDir)) {
+      fs.mkdirSync(this.storageDir, { recursive: true });
+    }
+    if (!fs.existsSync(this.dataFile)) {
+      fs.writeFileSync(this.dataFile, JSON.stringify({}, null, 2), 'utf-8');
+    }
   }
 
   load() {
     try {
-      if (fs.existsSync(STATS_FILE)) {
-        const d = JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8'));
-        this.totalRequests = d.totalRequests || 0;
-        this.totalInputTokens = d.totalInputTokens || 0;
-        this.totalOutputTokens = d.totalOutputTokens || 0;
-        this.totalCachedTokens = d.totalCachedTokens || 0;
-        this.logs = Array.isArray(d.logs) ? d.logs.slice(0, this.maxLogs) : [];
-        if (d.hourly) this.hourly = new Map(Object.entries(d.hourly));
-        if (d.daily) this.daily = new Map(Object.entries(d.daily));
+      if (fs.existsSync(this.dataFile)) {
+        this.userStats = JSON.parse(fs.readFileSync(this.dataFile, 'utf-8'));
       }
-    } catch (e) {}
+    } catch (e) {
+      this.userStats = {};
+    }
   }
 
   save() {
     try {
-      const dir = path.dirname(STATS_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-      const data = {
-        totalRequests: this.totalRequests,
-        totalInputTokens: this.totalInputTokens,
-        totalOutputTokens: this.totalOutputTokens,
-        totalCachedTokens: this.totalCachedTokens,
-        logs: this.logs.slice(0, this.maxLogs),
-        hourly: Object.fromEntries(this.hourly),
-        daily: Object.fromEntries(this.daily),
-      };
-      fs.writeFileSync(STATS_FILE, JSON.stringify(data), 'utf-8');
+      fs.writeFileSync(this.dataFile, JSON.stringify(this.userStats, null, 2), 'utf-8');
     } catch (e) {}
   }
 
+  getUserBucket(email) {
+    const key = (email || 'anonymous').trim().toLowerCase();
+    if (!this.userStats[key]) {
+      this.userStats[key] = {
+        total_requests: 0,
+        total_tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        cached_tokens: 0,
+        avg_latency_ms: 0,
+        logs: [],
+      };
+    }
+    return { key, bucket: this.userStats[key] };
+  }
+
   recordRequest({
+    email,
     model,
     latency_ms,
     status = 200,
@@ -67,29 +67,16 @@ export class StatsTracker {
     is_stream = false,
     error = null,
   }) {
-    this.totalRequests++;
-    this.totalInputTokens += input_tokens;
-    this.totalOutputTokens += output_tokens;
-    this.totalCachedTokens += cached_tokens;
+    const { bucket } = this.getUserBucket(email);
+    bucket.total_requests++;
+    bucket.input_tokens += input_tokens;
+    bucket.output_tokens += output_tokens;
+    bucket.cached_tokens += cached_tokens;
+    bucket.total_tokens = bucket.input_tokens + bucket.output_tokens;
+    bucket.avg_latency_ms = latency_ms;
 
     const now = new Date();
     const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
-    const hourKey = `${now.getHours()}:00`;
-    const dayKey = `${now.getMonth() + 1}-${now.getDate()}`;
-
-    // 小时统计
-    const hData = this.hourly.get(hourKey) || { requests: 0, tokens: 0, cached: 0 };
-    hData.requests++;
-    hData.tokens += (input_tokens + output_tokens);
-    hData.cached += cached_tokens;
-    this.hourly.set(hourKey, hData);
-
-    // 日期统计
-    const dData = this.daily.get(dayKey) || { requests: 0, tokens: 0, cached: 0 };
-    dData.requests++;
-    dData.tokens += (input_tokens + output_tokens);
-    dData.cached += cached_tokens;
-    this.daily.set(dayKey, dData);
 
     const logEntry = {
       id: Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -107,68 +94,34 @@ export class StatsTracker {
       error,
     };
 
-    this.logs.unshift(logEntry);
-    if (this.logs.length > this.maxLogs) {
-      this.logs.pop();
+    bucket.logs.unshift(logEntry);
+    if (bucket.logs.length > this.maxLogsPerUser) {
+      bucket.logs.pop();
     }
 
     this.save();
   }
 
-  getStats() {
-    const totalTokens = this.totalInputTokens + this.totalOutputTokens;
+  getUserStats(email) {
+    const { bucket } = this.getUserBucket(email);
     return {
-      total_requests: this.totalRequests,
-      total_tokens: totalTokens,
-      input_tokens: this.totalInputTokens,
-      output_tokens: this.totalOutputTokens,
-      cached_tokens: this.totalCachedTokens,
-      avg_latency_ms: this.logs.length > 0
-        ? Math.round(this.logs.reduce((acc, l) => acc + (l.latency_ms || 0), 0) / this.logs.length)
-        : 0,
+      total_requests: bucket.total_requests,
+      total_tokens: bucket.total_tokens,
+      input_tokens: bucket.input_tokens,
+      output_tokens: bucket.output_tokens,
+      cached_tokens: bucket.cached_tokens,
+      avg_latency_ms: bucket.avg_latency_ms,
     };
   }
 
-  getTrendData(mode = '24h') {
-    if (mode === '7d') {
-      const labels = [];
-      const tokens = [];
-      const reqs = [];
-      const now = new Date();
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 86400000);
-        const k = `${d.getMonth() + 1}-${d.getDate()}`;
-        labels.push(k);
-        const item = this.daily.get(k) || { requests: 0, tokens: 0 };
-        tokens.push(item.tokens);
-        reqs.push(item.requests);
-      }
-      return { labels, tokens, requests: reqs };
-    }
-
-    const labels = [];
-    const tokens = [];
-    const reqs = [];
-    const nowHour = new Date().getHours();
-    for (let i = 23; i >= 0; i--) {
-      const h = (nowHour - i + 24) % 24;
-      const k = `${h}:00`;
-      labels.push(k);
-      const item = this.hourly.get(k) || { requests: 0, tokens: 0 };
-      tokens.push(item.tokens);
-      reqs.push(item.requests);
-    }
-    return { labels, tokens, requests: reqs };
+  getUserLogs(email) {
+    const { bucket } = this.getUserBucket(email);
+    return bucket.logs;
   }
 
-  getLogs() {
-    return this.logs;
-  }
-
-  clearLogs() {
-    this.logs = [];
+  clearUserLogs(email) {
+    const { bucket } = this.getUserBucket(email);
+    bucket.logs = [];
     this.save();
   }
 }
-
-export const statsTracker = new StatsTracker();

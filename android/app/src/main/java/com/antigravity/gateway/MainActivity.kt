@@ -71,13 +71,10 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
-                // Google 授权登录或外部 OAuth 链接强制交由系统外部浏览器打开
+                // Google 授权登录或外部 OAuth 链接优先唤醒 Chrome / Google 官方浏览器打开
                 if (url.contains("accounts.google.com") || url.contains("oauth2") || url.startsWith("http://localhost:51121")) {
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        startActivity(intent)
-                        return true
-                    } catch (e: Exception) {}
+                    openInExternalBrowser(url)
+                    return true
                 }
                 return false
             }
@@ -106,7 +103,42 @@ class MainActivity : AppCompatActivity() {
         handleIntentAction(intent)
     }
 
-    private fun ensureApiKeyExists() {
+    private fun openInExternalBrowser(url: String) {
+        val uri = Uri.parse(url)
+        // 优先尝试 Google Chrome 官方浏览器，完美支持 Google 授权且不会拦截
+        val chromePackages = listOf("com.android.chrome", "com.google.android.apps.chrome", "com.chrome.beta")
+        for (pkg in chromePackages) {
+            try {
+                val chromeIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                    setPackage(pkg)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(chromeIntent)
+                return
+            } catch (e: Exception) {}
+        }
+
+        // 如果未安装 Chrome，调用系统默认外部浏览器选择器
+        try {
+            val generalIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(generalIntent)
+        } catch (e: Exception) {
+            // 如果连外部浏览器都无法拉起，直接弹窗复制链接给用户
+            AlertDialog.Builder(this)
+                .setTitle("🔗 请在外部浏览器中打开授权")
+                .setMessage("请复制以下链接，并在手机自带浏览器或 Chrome 中打开完成授权：\n\n$url")
+                .setPositiveButton("复制链接") { _, _ ->
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("Google Auth URL", url)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(this, "链接已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("关闭", null)
+                .show()
+        }
+    }
         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if (sp.getString(KEY_API_KEY, null).isNullOrEmpty()) {
             val generatedKey = "ag_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12)

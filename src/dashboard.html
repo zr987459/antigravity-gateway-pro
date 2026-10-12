@@ -184,34 +184,49 @@
   <!-- 选项卡 1：实时配额 (Quota) -->
   <div id="tab-pane-quota" class="card">
     <div class="card-title">
-      <span>📊 Google Cloud Code 实时配额</span>
+      <span>📊 Google Cloud Code 实时配额 (5小时 / 7天双窗口)</span>
       <button class="btn btn-outline" id="btn-refresh-quota">🔄 刷新</button>
     </div>
 
-    <!-- Gemini 配额组 -->
+    <!-- Gemini 配额组 (5小时滑动 + 7天重置) -->
     <div class="quota-group">
       <div class="quota-group-title">
         <span>🤖 Gemini 模型组 (Flash / Pro)</span>
-        <span class="badge" id="gemini-status-badge">76% 充足</span>
+        <span class="badge" id="gemini-status-badge">100% 充足</span>
       </div>
-      <div class="quota-meta">
+      
+      <!-- 5小时滚动窗口 -->
+      <div class="quota-meta" style="margin-top:4px;">
         <span>5小时滚动可用量</span>
         <span id="q-gemini-5h-text">--%</span>
       </div>
       <div class="progress-bg"><div class="progress-fill" id="q-gemini-5h-fill"></div></div>
       <div class="quota-meta">
         <span id="q-gemini-5h-reset">重置: 计算中...</span>
-        <span>窗口额度: 动态自适应</span>
+        <span>短周期爆发配额</span>
+      </div>
+
+      <!-- 7天周度窗口 -->
+      <div class="quota-meta" style="margin-top:8px;">
+        <span>7天周度累计剩余 (Weekly)</span>
+        <span id="q-gemini-7d-text">--%</span>
+      </div>
+      <div class="progress-bg"><div class="progress-fill" id="q-gemini-7d-fill" style="background:linear-gradient(90deg, #10b981, #06b6d4);"></div></div>
+      <div class="quota-meta">
+        <span id="q-gemini-7d-reset">周重置: 计算中...</span>
+        <span>长周期基准配额</span>
       </div>
     </div>
 
-    <!-- Claude 3P 配额组 -->
+    <!-- Claude 3P 配额组 (5小时滑动 + 7天重置) -->
     <div class="quota-group">
       <div class="quota-group-title">
         <span>🎭 Claude 3P 模型组 (Sonnet / Opus)</span>
         <span class="badge blue" id="claude-status-badge">100% 满额</span>
       </div>
-      <div class="quota-meta">
+
+      <!-- 5小时滚动窗口 -->
+      <div class="quota-meta" style="margin-top:4px;">
         <span>5小时滚动可用量</span>
         <span id="q-claude-5h-text">--%</span>
       </div>
@@ -220,10 +235,28 @@
         <span id="q-claude-5h-reset">重置: 计算中...</span>
         <span>高优专线分配</span>
       </div>
+
+      <!-- 7天周度窗口 -->
+      <div class="quota-meta" style="margin-top:8px;">
+        <span>7天周度累计剩余 (Weekly)</span>
+        <span id="q-claude-7d-text">--%</span>
+      </div>
+      <div class="progress-bg"><div class="progress-fill" id="q-claude-7d-fill" style="background:linear-gradient(90deg, #818cf8, #a855f7);"></div></div>
+      <div class="quota-meta">
+        <span id="q-claude-7d-reset">周重置: 计算中...</span>
+        <span>每周总量限额</span>
+      </div>
     </div>
 
-    <div style="font-size:0.72rem;color:var(--sub);display:flex;justify-content:space-between;padding-top:2px;">
-      <span>主控: <b id="quota-email-label" style="color:#fff;">--</b></span>
+    <!-- 配额说明提示 -->
+    <div style="background:#070c17; border:1px solid var(--border); border-radius:8px; padding:10px; font-size:0.7rem; color:var(--sub); line-height:1.6; margin-top:4px;">
+      💡 <b>配额机制说明：</b><br>
+      • <b>5小时窗口</b>：防瞬时高频调用。每过 5 小时自动滚动恢复，适合日常编码高频提问。<br>
+      • <b>7天周窗口</b>：Google 给单个账号每周的总调用上限。周初重置，合理分配每周深度思考调用量。
+    </div>
+
+    <div style="font-size:0.72rem;color:var(--sub);display:flex;justify-content:space-between;padding-top:4px;">
+      <span>当前账号: <b id="quota-email-label" style="color:#fff;">--</b></span>
       <span id="quota-sync-time">同步: --</span>
     </div>
   </div>
@@ -462,16 +495,19 @@ claude`;
 
     renderAccountsList(data.accounts || [], data.active_account?.email);
 
-    if (data.stats) {
-      document.getElementById('m-total-reqs').textContent = data.stats.total_requests + ' 次';
-      document.getElementById('m-total-tokens').textContent = data.stats.total_tokens.toLocaleString();
-      document.getElementById('m-avg-latency').textContent = data.stats.avg_latency_ms ? data.stats.avg_latency_ms + ' ms' : '-- ms';
-      document.getElementById('m-cached-tokens').textContent = data.stats.cached_tokens.toLocaleString();
-      document.getElementById('m-sub-tokens').textContent = `↑${data.stats.input_tokens.toLocaleString()} · ↓${data.stats.output_tokens.toLocaleString()}`;
+      const userEmail = data.active_account?.email;
+      const statsUrl = userEmail ? '/api/stats?email=' + encodeURIComponent(userEmail) + '&_t=' + Date.now() : '/api/stats?_t=' + Date.now();
+      const statsRes = await fetch(statsUrl);
+      const userStats = await statsRes.json();
 
-      document.getElementById('stat-detail-in').textContent = data.stats.input_tokens.toLocaleString();
-      document.getElementById('stat-detail-out').textContent = data.stats.output_tokens.toLocaleString();
-    }
+      document.getElementById('m-total-reqs').textContent = (userStats.total_requests || 0) + ' 次';
+      document.getElementById('m-total-tokens').textContent = (userStats.total_tokens || 0).toLocaleString();
+      document.getElementById('m-avg-latency').textContent = userStats.avg_latency_ms ? userStats.avg_latency_ms + ' ms' : '-- ms';
+      document.getElementById('m-cached-tokens').textContent = (userStats.cached_tokens || 0).toLocaleString();
+      document.getElementById('m-sub-tokens').textContent = `↑${(userStats.input_tokens || 0).toLocaleString()} · ↓${(userStats.output_tokens || 0).toLocaleString()}`;
+
+      document.getElementById('stat-detail-in').textContent = (userStats.input_tokens || 0).toLocaleString();
+      document.getElementById('stat-detail-out').textContent = (userStats.output_tokens || 0).toLocaleString();
   } catch (e) {}
 }
 
@@ -584,25 +620,35 @@ async function removeAcc(email) {
 async function loadQuota() {
   const btn = document.getElementById('btn-refresh-quota');
   btn.textContent = '🔄 同步中...';
+  const email = document.getElementById('quota-email-label').textContent;
+  const emailParam = (email && email !== '--') ? '&email=' + encodeURIComponent(email) : '';
   try {
-    const res = await fetch('/api/gemini/quota?_t=' + Date.now());
+    const res = await fetch('/api/gemini/quota?_t=' + Date.now() + emailParam);
     const data = await res.json();
     if (data.ok) {
-      const g5 = data.five_hour?.percentage ?? 76;
+      // Gemini 5h & 7d
+      const g5 = data.gemini_5h?.percentage ?? 100;
       document.getElementById('q-gemini-5h-text').textContent = g5 + '%';
       document.getElementById('q-gemini-5h-fill').style.width = g5 + '%';
-      document.getElementById('gemini-status-badge').textContent = g5 + '% 充足';
-      if (data.five_hour?.reset_time) {
-        document.getElementById('q-gemini-5h-reset').textContent = '重置: ' + new Date(data.five_hour.reset_time).toLocaleTimeString();
-      }
+      document.getElementById('gemini-status-badge').textContent = g5 + '% 可用';
+      document.getElementById('q-gemini-5h-reset').textContent = '重置: ' + (data.gemini_5h?.reset_text || '动态自适应');
 
-      const c5 = data.claude_five_hour?.percentage ?? 100;
+      const g7 = data.gemini_7d?.percentage ?? 100;
+      document.getElementById('q-gemini-7d-text').textContent = g7 + '%';
+      document.getElementById('q-gemini-7d-fill').style.width = g7 + '%';
+      document.getElementById('q-gemini-7d-reset').textContent = '周重置: ' + (data.gemini_7d?.reset_text || '动态自适应');
+
+      // Claude 5h & 7d
+      const c5 = data.claude_5h?.percentage ?? 100;
       document.getElementById('q-claude-5h-text').textContent = c5 + '%';
       document.getElementById('q-claude-5h-fill').style.width = c5 + '%';
-      document.getElementById('claude-status-badge').textContent = c5 + '% 满额';
-      if (data.claude_five_hour?.reset_time) {
-        document.getElementById('q-claude-5h-reset').textContent = '重置: ' + new Date(data.claude_five_hour.reset_time).toLocaleTimeString();
-      }
+      document.getElementById('claude-status-badge').textContent = c5 + '% 可用';
+      document.getElementById('q-claude-5h-reset').textContent = '重置: ' + (data.claude_5h?.reset_text || '高优专线');
+
+      const c7 = data.claude_7d?.percentage ?? 100;
+      document.getElementById('q-claude-7d-text').textContent = c7 + '%';
+      document.getElementById('q-claude-7d-fill').style.width = c7 + '%';
+      document.getElementById('q-claude-7d-reset').textContent = '周重置: ' + (data.claude_7d?.reset_text || '动态自适应');
 
       document.getElementById('quota-sync-time').textContent = '同步: ' + (data.updated_time || new Date().toLocaleTimeString());
       showToast('✅ 配额已刷新！');
@@ -700,8 +746,10 @@ document.getElementById('btn-run-tests').onclick = async () => {
 };
 
 async function loadLogs() {
+  const email = document.getElementById('quota-email-label').textContent;
+  const emailParam = (email && email !== '--') ? '&email=' + encodeURIComponent(email) : '';
   try {
-    const res = await fetch('/api/logs?_t=' + Date.now());
+    const res = await fetch('/api/logs?_t=' + Date.now() + emailParam);
     const logs = await res.json();
     const c = document.getElementById('console-logs');
     if (!logs || logs.length === 0) {

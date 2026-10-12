@@ -16,7 +16,7 @@ import { OAuthFlowManager } from './oauth-flow.mjs';
 import { runConnectivityTest } from './test-runner.mjs';
 import { fetchRealQuota } from './quota-fetcher.mjs';
 import { getModelsResponse } from './models-catalog.mjs';
-import { statsTracker } from './stats.mjs';
+import { StatsTracker } from './stats.mjs';
 import { ANTIGRAVITY_ENDPOINTS } from './constants.mjs';
 import {
   buildAntigravityHeaders,
@@ -30,6 +30,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8790;
 const accountPool = new AccountPool(path.join(__dirname, '..', 'data', 'accounts'));
 const licenseManager = new LicenseManager(path.join(__dirname, '..', 'data'));
+const statsTracker = new StatsTracker(path.join(__dirname, '..', 'data'));
 const oauthFlowManager = new OAuthFlowManager(accountPool);
 const dashboardHtmlPath = path.join(__dirname, 'dashboard.html');
 
@@ -139,26 +140,22 @@ const server = http.createServer(async (req, res) => {
 
   // 2. 统计数据与运行日志接口
   if (url.pathname === '/api/stats') {
+    const email = url.searchParams.get('email') || accountPool.getActiveManager()?.tokenData?.email || 'global';
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(statsTracker.getStats(), null, 2));
-    return;
-  }
-
-  if (url.pathname === '/api/stats/trend') {
-    const mode = url.searchParams.get('mode') || '24h';
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(statsTracker.getTrendData(mode), null, 2));
+    res.end(JSON.stringify(statsTracker.getUserStats(email), null, 2));
     return;
   }
 
   if (url.pathname === '/api/logs') {
+    const email = url.searchParams.get('email') || accountPool.getActiveManager()?.tokenData?.email || 'global';
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(statsTracker.getLogs(), null, 2));
+    res.end(JSON.stringify(statsTracker.getUserLogs(email), null, 2));
     return;
   }
 
   if (url.pathname === '/api/logs/clear' && req.method === 'POST') {
-    statsTracker.clearLogs();
+    const email = url.searchParams.get('email') || accountPool.getActiveManager()?.tokenData?.email || 'global';
+    statsTracker.clearUserLogs(email);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
     return;
@@ -286,8 +283,9 @@ const server = http.createServer(async (req, res) => {
 
   // 9. 真实配额接口 (/api/gemini/quota)
   if (url.pathname === '/api/gemini/quota') {
-    const activeMgr = accountPool.getActiveManager();
-    const quotaData = await fetchRealQuota(activeMgr);
+    const email = url.searchParams.get('email');
+    const mgr = email ? accountPool.getManager(email) : accountPool.getActiveManager();
+    const quotaData = await fetchRealQuota(mgr || accountPool.getActiveManager());
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(quotaData));
     return;
@@ -407,6 +405,7 @@ const server = http.createServer(async (req, res) => {
         if (isStreaming) {
           await handleStreamConversion(response, res, anthropicReq.model, (usage) => {
             statsTracker.recordRequest({
+              email: userEmail,
               model: anthropicReq.model,
               latency_ms: Date.now() - startTime,
               status: 200,
@@ -423,6 +422,7 @@ const server = http.createServer(async (req, res) => {
           res.end(JSON.stringify(anthropicResp));
 
           statsTracker.recordRequest({
+            email: userEmail,
             model: anthropicReq.model,
             latency_ms: totalLatency,
             status: 200,
