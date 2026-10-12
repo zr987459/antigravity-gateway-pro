@@ -61,15 +61,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: v2.5-pro
-          name: "Antigravity Gateway Pro v2.1.0"
+          tag_name: v3.0-native
+          name: "Antigravity Gateway Native v3.0.0"
           body: |
-            ## 🚀 Antigravity Gateway Pro (v2.1.0)
-            - 核心修复：APK 默认直连本地 8790，绝不再加载未经更新的云端旧版本
-            - 账号隔离：两个账号各自独立统计与日志
-            - 双重配额：5小时滚动窗口 + 7天周度窗口双层展示
-            - 浏览器唤醒：优先定向拉起 Chrome / 复制链接兜底
-            - 极简授权：一个密钥强绑定一个账号
+            ## 🚀 Antigravity Gateway Native (v3.0.0) 终极原生商业版
+            - 彻底重构：完全移除脆弱的 WebView 网页层，100% Android 原生控件开发，点击秒响应！
+            - 独立隔离：买家的 Google 凭据仅存储在买家手机本地 SharedPreferences，零云端泄露，零共用风险！
+            - 商业授权：内置一卡一号强绑定鉴权，买家激活卡密即刻与该账号绑定！
+            - Chrome 定向拉起：原生 Intent 唤醒系统 Chrome 浏览器，支持一键复制授权网址！
+            - 实时配额：原生呈现 5小时爆发窗口 + 7天周度窗口双重可用配额！
           files: dist/AntigravityGateway-Debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
