@@ -1,30 +1,27 @@
 package com.antigravity.gateway
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
-import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.Executors
 
 /**
  * Antigravity Gateway Pro (100% Android 原生极简商用客户端)
- *
- * 核心设计：
- * 1. 彻底移除脆弱的 WebView 网页层，全部采用流畅的原生 Android UI，点击 100% 灵敏响应！
- * 2. 账号完全隔离：用户的 Google Token 仅保存在买家自己的手机 SharedPreferences 本地，绝不接触开发者账号！
- * 3. 一卡一号强绑定：买家输入授权码激活后与该 Google 账号永久绑定。
- * 4. 授权一键唤醒 Chrome：直接通过原生 Intent 唤醒 Chrome 浏览器，支持复制链接兜底。
  */
 class MainActivity : AppCompatActivity() {
 
@@ -32,12 +29,13 @@ class MainActivity : AppCompatActivity() {
     private val KEY_REFRESH_TOKEN = "user_refresh_token"
     private val KEY_USER_EMAIL = "user_email"
     private val KEY_LICENSE_KEY = "user_license_key"
-    private val KEY_CLOUD_GATEWAY = "cloud_gateway_url"
 
-    // 默认高可用公开云端协议转换通道
+    // 默认云端转换通道
     private val DEFAULT_GATEWAY_URL = "https://antigravity-gateway-it14.onrender.com"
 
-    // UI 组件
+    private val executor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     private lateinit var tvStatusBadge: TextView
     private lateinit var tvAccountEmail: TextView
     private lateinit var tvLicenseStatus: TextView
@@ -54,13 +52,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvClaude7d: TextView
     private lateinit var btnRefreshQuota: Button
 
-    private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildNativeLayout())
 
-        // 启动后台防杀小圆圈与常驻通知
         try {
             val serviceIntent = Intent(this, GatewayService::class.java)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -71,11 +66,6 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {}
 
         refreshUIState()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        coroutineScope.cancel()
     }
 
     private fun buildNativeLayout(): View {
@@ -93,7 +83,6 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        // 1. 顶部 Header
         val headerLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -120,7 +109,6 @@ class MainActivity : AppCompatActivity() {
         headerLayout.addView(tvStatusBadge)
         container.addView(headerLayout)
 
-        // 2. 账号卡片 (Google Account)
         val accountCard = createCardView("👤 账号信息 (数据独立保存在本机)")
         tvAccountEmail = TextView(this).apply {
             text = "未登录 Google 账号"
@@ -158,7 +146,6 @@ class MainActivity : AppCompatActivity() {
         accountCard.addView(btnLayout)
         container.addView(accountCard)
 
-        // 3. 商业授权卡片 (一卡一号)
         val licCard = createCardView("🔑 专属软件授权 (一卡一号强绑定)")
         tvLicenseStatus = TextView(this).apply {
             text = "授权状态: 尚未绑定有效密钥"
@@ -190,7 +177,6 @@ class MainActivity : AppCompatActivity() {
         licCard.addView(btnActivateLicense)
         container.addView(licCard)
 
-        // 4. 实时配额监控 (5h / 7d 双窗口)
         val quotaCard = createCardView("📊 账号实时可用配额 (官方沙箱)")
         tvGemini5h = createQuotaLabel("Gemini 5小时可用量: --%")
         tvGemini7d = createQuotaLabel("Gemini 7天累计可用量: --%")
@@ -211,7 +197,6 @@ class MainActivity : AppCompatActivity() {
         quotaCard.addView(btnRefreshQuota)
         container.addView(quotaCard)
 
-        // 5. 客户端连接配置 (一键复制到 Claude Code / Cursor / Pi)
         val cfgCard = createCardView("📱 客户端集成参数 (已生成专属 Key)")
         tvApiBaseUrl = TextView(this).apply {
             text = "Base URL: $DEFAULT_GATEWAY_URL"
@@ -332,7 +317,6 @@ class MainActivity : AppCompatActivity() {
         val uri = Uri.parse(authUrl)
         var launched = false
 
-        // 优先定向呼出 Chrome 官方浏览器
         val chromePackages = listOf("com.android.chrome", "com.google.android.apps.chrome", "com.chrome.beta")
         for (pkg in chromePackages) {
             try {
@@ -356,7 +340,6 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {}
         }
 
-        // 无论如何弹出一个友好的输入对话框，支持手动粘贴授权返回的代码
         showManualCodeInputDialog(authUrl)
     }
 
@@ -398,7 +381,7 @@ class MainActivity : AppCompatActivity() {
 
         Toast.makeText(this, "正在换取离线凭证...", Toast.LENGTH_SHORT).show()
 
-        coroutineScope.launch(Dispatchers.IO) {
+        executor.execute {
             try {
                 val url = URL("$DEFAULT_GATEWAY_URL/api/oauth/exchange")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -421,7 +404,7 @@ class MainActivity : AppCompatActivity() {
                 val resp = reader.readText()
                 val json = JSONObject(resp)
 
-                withContext(Dispatchers.Main) {
+                mainHandler.post {
                     if (json.optBoolean("ok", false)) {
                         val email = json.optString("email", "已登录")
                         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -437,7 +420,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
+                mainHandler.post {
                     Toast.makeText(this@MainActivity, "网络连接失败: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
@@ -460,7 +443,7 @@ class MainActivity : AppCompatActivity() {
 
         Toast.makeText(this, "正在校验卡密并绑定...", Toast.LENGTH_SHORT).show()
 
-        coroutineScope.launch(Dispatchers.IO) {
+        executor.execute {
             try {
                 val url = URL("$DEFAULT_GATEWAY_URL/api/license/activate")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -484,7 +467,7 @@ class MainActivity : AppCompatActivity() {
                 val resp = reader.readText()
                 val json = JSONObject(resp)
 
-                withContext(Dispatchers.Main) {
+                mainHandler.post {
                     if (json.optBoolean("ok", false)) {
                         sp.edit().putString(KEY_LICENSE_KEY, code).apply()
                         Toast.makeText(this@MainActivity, "🎉 绑定成功！已与您的账号永久锁死", Toast.LENGTH_LONG).show()
@@ -494,7 +477,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
+                mainHandler.post {
                     Toast.makeText(this@MainActivity, "验证失败: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -505,7 +488,7 @@ class MainActivity : AppCompatActivity() {
         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val email = sp.getString(KEY_USER_EMAIL, null) ?: return
 
-        coroutineScope.launch(Dispatchers.IO) {
+        executor.execute {
             try {
                 val url = URL("$DEFAULT_GATEWAY_URL/api/gemini/quota?email=${Uri.encode(email)}")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -518,7 +501,7 @@ class MainActivity : AppCompatActivity() {
                 val resp = reader.readText()
                 val json = JSONObject(resp)
 
-                withContext(Dispatchers.Main) {
+                mainHandler.post {
                     if (json.optBoolean("ok", false)) {
                         val g5 = json.optJSONObject("gemini_5h")
                         val g7 = json.optJSONObject("gemini_7d")
