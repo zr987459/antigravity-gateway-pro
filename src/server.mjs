@@ -138,11 +138,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === '/api/license/status' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ enforced: licenseManager.isEnforced() }));
+    return;
+  }
+
   // 2. 统计数据与运行日志接口
   if (url.pathname === '/api/stats') {
     const email = url.searchParams.get('email') || accountPool.getActiveManager()?.tokenData?.email || 'global';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(statsTracker.getUserStats(email), null, 2));
+    return;
+  }
+
+  if (url.pathname === '/api/stats/trend') {
+    const mode = url.searchParams.get('mode') || '24h';
+    const email = url.searchParams.get('email') || accountPool.getActiveManager()?.tokenData?.email || null;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(statsTracker.getTrendData(email, mode), null, 2));
     return;
   }
 
@@ -181,7 +195,7 @@ const server = http.createServer(async (req, res) => {
       accounts: accountPool.getAllStatus(),
       stats: statsTracker.getStats(),
       signature_cache_size: signatureCache.size(),
-      license_required: false,
+      license_required: licenseManager.isEnforced(),
     };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(status, null, 2));
@@ -286,6 +300,18 @@ const server = http.createServer(async (req, res) => {
     const email = url.searchParams.get('email');
     const mgr = email ? accountPool.getManager(email) : accountPool.getActiveManager();
     const quotaData = await fetchRealQuota(mgr || accountPool.getActiveManager());
+    // 老界面字段名兼容（five_hour / claude_five_hour / weekly）
+    quotaData.five_hour = {
+      percentage: quotaData.gemini_5h?.percentage ?? 100,
+      reset_time: quotaData.gemini_5h?.reset_time || null,
+    };
+    quotaData.claude_five_hour = {
+      percentage: quotaData.claude_5h?.percentage ?? 100,
+      reset_time: quotaData.claude_5h?.reset_time || null,
+    };
+    quotaData.weekly = {
+      percentage: quotaData.gemini_7d?.percentage ?? 100,
+    };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(quotaData));
     return;
@@ -312,10 +338,10 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        // 商业卡密鉴权校验 (强制一卡一号强绑定校验)
+        // 商业卡密鉴权校验 (仅当服务端开启"强制鉴权模式"时才拦截；默认开放模式，老账号不受影响)
         const userEmail = activeMgr.tokenData.email;
         const licCheck = licenseManager.checkAuthorization(userEmail);
-        if (!licCheck.authorized) {
+        if (licenseManager.isEnforced() && !licCheck.authorized) {
           res.writeHead(403, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             error: {
