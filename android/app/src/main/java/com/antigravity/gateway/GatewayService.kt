@@ -109,8 +109,8 @@ class GatewayService : Service() {
         }
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            110,
+            110,
             layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -135,7 +135,6 @@ class GatewayService : Service() {
             setPadding(0, 0, 0, 0)
             background = bg
             elevation = 12f
-            layoutParams = WindowManager.LayoutParams(110, 110)
         }
 
         floatingView = bubble

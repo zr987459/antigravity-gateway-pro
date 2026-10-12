@@ -205,7 +205,7 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("⚙ 本地网关参数配置")
             .setView(layout)
-            .setPositiveButton("保存并重启连接") { _, _ =>
+            .setPositiveButton("保存并重启连接") { _, _ ->
                 val pStr = portInput.text.toString().trim()
                 val kStr = keyInput.text.toString().trim()
                 val port = pStr.toIntOrNull() ?: DEFAULT_PORT
