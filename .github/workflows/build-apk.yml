@@ -47,7 +47,7 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon || (echo "=== GRADLE LOGS ===" && ./gradlew assembleDebug --no-daemon --info | tail -n 120 && exit 1)
           mkdir -p ../dist
           cp app/build/outputs/apk/debug/*.apk ../dist/AntigravityGateway-Debug.apk
 
