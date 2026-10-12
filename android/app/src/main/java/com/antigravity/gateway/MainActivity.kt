@@ -15,29 +15,31 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import java.util.UUID
 
 /**
- * Antigravity Gateway Pro (本地独立版)
+ * Antigravity Gateway Pro
  *
- * 1. 严格专注于本地网关连接（默认 127.0.0.1:8790）
- * 2. 悬浮窗磁吸、极简小圆圈、快捷菜单（主页、刷新、关闭）
- * 3. 登录授权自动唤醒系统外部浏览器，杜绝 Google 403 拦截
- * 4. 支持在设置中自由更改端口与自定义/随机生成 API Key
+ * 1. 默认开箱即用直连云端免部署通道，也可随时一键切回本地 127.0.0.1:8790
+ * 2. 磁吸边缘极简蓝光小圆圈悬浮球 (⚡)，点击呼出快捷菜单（主页、刷新、关闭）
+ * 3. Google OAuth 自动唤醒系统外部浏览器，彻底解决 403 disallowed_user_agent
+ * 4. 支持 API 密钥与网关地址自由配置
  */
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
-    private val PREFS_NAME = "antigravity_local_prefs"
-    private val KEY_PORT = "gateway_port"
+    private val PREFS_NAME = "antigravity_pro_prefs"
+    private val KEY_GATEWAY_URL = "gateway_url"
     private val KEY_API_KEY = "gateway_api_key"
-    private val DEFAULT_PORT = 8790
+    private val DEFAULT_CLOUD_URL = "https://antigravity-gateway-it14.onrender.com"
+    private val LOCAL_GATEWAY_URL = "http://127.0.0.1:8790"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,11 +66,12 @@ class MainActivity : AppCompatActivity() {
         settings.allowFileAccess = false
         settings.databaseEnabled = true
         settings.cacheMode = WebSettings.LOAD_NO_CACHE
-        settings.userAgentString = settings.userAgentString + " AntigravityGatewayApp/2.3"
+        settings.userAgentString = settings.userAgentString + " AntigravityGatewayApp/2.4"
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
+                // Google 授权登录或外部 OAuth 链接强制交由系统外部浏览器打开
                 if (url.contains("accounts.google.com") || url.contains("oauth2") || url.startsWith("http://localhost:51121")) {
                     try {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -77,6 +80,10 @@ class MainActivity : AppCompatActivity() {
                     } catch (e: Exception) {}
                 }
                 return false
+            }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                super.onReceivedError(view, request, error)
             }
         }
 
@@ -95,38 +102,44 @@ class MainActivity : AppCompatActivity() {
         rootLayout.addView(fab, fabParams)
 
         setContentView(rootLayout)
-        loadLocalGatewayUrl()
+        loadGatewayUrl()
         handleIntentAction(intent)
     }
 
     private fun ensureApiKeyExists() {
         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if (sp.getString(KEY_API_KEY, null).isNullOrEmpty()) {
-            val generatedKey = "antigravity_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12)
+            val generatedKey = "ag_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12)
             sp.edit().putString(KEY_API_KEY, generatedKey).apply()
         }
     }
 
-    private fun getGatewayPort(): Int {
+    private fun getGatewayUrl(): String {
         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return sp.getInt(KEY_PORT, DEFAULT_PORT)
+        return sp.getString(KEY_GATEWAY_URL, DEFAULT_CLOUD_URL) ?: DEFAULT_CLOUD_URL
     }
 
     private fun getApiKey(): String {
         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return sp.getString(KEY_API_KEY, "antigravity-local") ?: "antigravity-local"
+        return sp.getString(KEY_API_KEY, "antigravity-client") ?: "antigravity-client"
     }
 
-    private fun loadLocalGatewayUrl() {
-        val port = getGatewayPort()
-        val url = "http://127.0.0.1:$port"
+    private fun loadGatewayUrl() {
+        val url = getGatewayUrl()
         webView.loadUrl(url)
+    }
+
+    private fun saveAndLoadUrl(newUrl: String) {
+        val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        sp.edit().putString(KEY_GATEWAY_URL, newUrl).apply()
+        webView.loadUrl(newUrl)
+        Toast.makeText(this, "已连接网关: $newUrl", Toast.LENGTH_SHORT).show()
     }
 
     private fun handleIntentAction(intent: Intent?) {
         if (intent?.getStringExtra("action") == "refresh") {
             webView.reload()
-            Toast.makeText(this, "已刷新本地网关", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "已刷新控制台", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -171,7 +184,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettingsDialog() {
-        val currentPort = getGatewayPort()
+        val currentUrl = getGatewayUrl()
         val currentKey = getApiKey()
 
         val layout = LinearLayout(this).apply {
@@ -179,13 +192,13 @@ class MainActivity : AppCompatActivity() {
             setPadding(40, 30, 40, 10)
         }
 
-        val portInput = EditText(this).apply {
-            setText(currentPort.toString())
-            hint = "监听端口 (默认 8790)"
+        val urlInput = EditText(this).apply {
+            setText(currentUrl)
+            hint = "网关服务地址 (http:// 或 https://)"
         }
         val keyInput = EditText(this).apply {
             setText(currentKey)
-            hint = "API 密钥 (可点击下方随机生成)"
+            hint = "API 密钥"
         }
 
         val btnGenerateKey = Button(this).apply {
@@ -196,30 +209,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        layout.addView(android.widget.TextView(this).apply { text = "本地网关端口：" })
-        layout.addView(portInput)
-        layout.addView(android.widget.TextView(this).apply { text = "API 密钥：" })
+        layout.addView(TextView(this).apply { text = "网关服务地址 (默认免部署云端通道)：" })
+        layout.addView(urlInput)
+        layout.addView(TextView(this).apply { text = "API 密钥：" })
         layout.addView(keyInput)
         layout.addView(btnGenerateKey)
 
         AlertDialog.Builder(this)
-            .setTitle("⚙ 本地网关参数配置")
+            .setTitle("⚙ 网关连接配置")
             .setView(layout)
-            .setPositiveButton("保存并重启连接") { _, _ ->
-                val pStr = portInput.text.toString().trim()
+            .setPositiveButton("保存并连接") { _, _ ->
+                val uStr = urlInput.text.toString().trim()
                 val kStr = keyInput.text.toString().trim()
-                val port = pStr.toIntOrNull() ?: DEFAULT_PORT
+                val targetUrl = if (uStr.isNotEmpty()) uStr else DEFAULT_CLOUD_URL
 
                 val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 sp.edit()
-                    .putInt(KEY_PORT, port)
+                    .putString(KEY_GATEWAY_URL, targetUrl)
                     .putString(KEY_API_KEY, kStr)
                     .apply()
 
-                loadLocalGatewayUrl()
-                Toast.makeText(this, "配置已更新：端口 $port", Toast.LENGTH_SHORT).show()
+                saveAndLoadUrl(targetUrl)
             }
-            .setNegativeButton("取消", null)
+            .setNeutralButton("切回本地 8790") { _, _ ->
+                saveAndLoadUrl(LOCAL_GATEWAY_URL)
+            }
+            .setNegativeButton("切回免配置云端") { _, _ ->
+                saveAndLoadUrl(DEFAULT_CLOUD_URL)
+            }
             .show()
     }
 

@@ -9,6 +9,8 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { AccountPool } from './account-pool.mjs';
+import { TokenManager } from './token-manager.mjs';
+import { LicenseManager } from './license-manager.mjs';
 import { signatureCache } from './signature-cache.mjs';
 import { OAuthFlowManager } from './oauth-flow.mjs';
 import { runConnectivityTest } from './test-runner.mjs';
@@ -27,8 +29,43 @@ import { handleStreamConversion } from './sse-streamer.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8790;
 const accountPool = new AccountPool(path.join(__dirname, '..', 'data', 'accounts'));
+const licenseManager = new LicenseManager(path.join(__dirname, '..', 'data'));
 const oauthFlowManager = new OAuthFlowManager(accountPool);
 const dashboardHtmlPath = path.join(__dirname, 'dashboard.html');
+
+// 多租户隔离：基于每个客户端的 Google Refresh Token 动态缓存专有管理器，实现配额完全隔离、互不挤占
+const dynamicUserManagers = new Map();
+
+async function getManagerForRequest(req) {
+  let clientToken = req.headers['x-goog-user-token'] || req.headers['x-refresh-token'];
+  const authHeader = req.headers['authorization'] || '';
+  const apiKey = req.headers['x-api-key'] || '';
+
+  if (!clientToken) {
+    if (authHeader.startsWith('Bearer 1//')) {
+      clientToken = authHeader.slice(7).trim();
+    } else if (apiKey.startsWith('1//')) {
+      clientToken = apiKey.trim();
+    }
+  }
+
+  if (clientToken) {
+    let mgr = dynamicUserManagers.get(clientToken);
+    if (!mgr) {
+      mgr = new TokenManager(null);
+      mgr.tokenData.refreshToken = clientToken;
+      await mgr.refreshAccessToken();
+      dynamicUserManagers.set(clientToken, mgr);
+      if (dynamicUserManagers.size > 500) {
+        const firstKey = dynamicUserManagers.keys().next().value;
+        dynamicUserManagers.delete(firstKey);
+      }
+    }
+    return mgr;
+  }
+
+  return accountPool.getActiveManager();
+}
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -72,6 +109,32 @@ const server = http.createServer(async (req, res) => {
       res.end('APK not found locally.');
       return;
     }
+  }
+
+  // 1.8 商业卡密激活与鉴权接口
+  if (url.pathname === '/api/license/activate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => {
+      try {
+        const { code, email } = JSON.parse(body);
+        const result = licenseManager.activateKey(code, email);
+        res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, message: '请求参数格式错误' }));
+      }
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/license/check' && req.method === 'GET') {
+    const email = url.searchParams.get('email');
+    const result = licenseManager.checkAuthorization(email);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(result));
+    return;
   }
 
   // 2. 统计数据与运行日志接口
@@ -238,14 +301,30 @@ const server = http.createServer(async (req, res) => {
       const startTime = Date.now();
       try {
         const anthropicReq = JSON.parse(body);
-        let activeMgr = accountPool.getActiveManager();
+        let activeMgr = await getManagerForRequest(req);
 
         if (!activeMgr) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             error: {
               type: 'authentication_error',
-              message: '账号池为空，请先在控制台授权 Google 账号',
+              message: '未识别到可用 Google 账号，请先在客户端登录',
+            },
+          }));
+          return;
+        }
+
+        // 商业卡密鉴权校验 (强制一卡一号强绑定校验)
+        const userEmail = activeMgr.tokenData.email;
+        const licCheck = licenseManager.checkAuthorization(userEmail);
+        if (!licCheck.authorized) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: {
+              type: 'permission_error',
+              message: `[未授权] 账号 ${userEmail || '未知'} ${licCheck.reason}`,
+              requires_license: true,
+              email: userEmail,
             },
           }));
           return;

@@ -35,6 +35,7 @@ export class TokenManager {
   }
 
   load() {
+    if (!this.storagePath) return;
     try {
       if (fs.existsSync(this.storagePath)) {
         const raw = fs.readFileSync(this.storagePath, 'utf-8');
@@ -46,6 +47,7 @@ export class TokenManager {
   }
 
   save() {
+    if (!this.storagePath) return;
     try {
       const dir = path.dirname(this.storagePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

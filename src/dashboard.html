@@ -174,6 +174,7 @@
   <!-- 核心分段控制器 (Segmented Tabs) -->
   <div class="nav-tabs">
     <button class="tab-btn active" onclick="switchTab('quota')">📊 配额</button>
+    <button class="tab-btn" onclick="switchTab('license')">🔑 授权码</button>
     <button class="tab-btn" onclick="switchTab('stats')">📈 趋势</button>
     <button class="tab-btn" onclick="switchTab('test')">🧪 测速</button>
     <button class="tab-btn" onclick="switchTab('agent')">📱 配置</button>
@@ -227,7 +228,30 @@
     </div>
   </div>
 
-  <!-- 选项卡 2：用量统计与消耗趋势 (Stats & Trends) -->
+  <!-- 选项卡 1.5：卡密激活与授权状态 (License Card) -->
+  <div id="tab-pane-license" class="card" style="display:none; border-color:rgba(56, 189, 248, 0.4);">
+    <div class="card-title">
+      <span>🔑 软件授权码与卡密激活 (一卡一号强绑定)</span>
+      <span class="badge" id="lic-status-badge">未激活</span>
+    </div>
+    
+    <div style="background:#070c17; border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;">
+      <div style="font-size:0.75rem; color:var(--sub);">当前绑定 Google 账号:</div>
+      <div id="lic-display-email" style="font-size:0.95rem; font-weight:700; color:#fff; margin-top:3px;">--</div>
+      <div style="font-size:0.72rem; color:var(--sub); margin-top:4px;" id="lic-display-expire">授权有效期: 尚未绑定有效卡密</div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <label style="font-size:0.75rem; color:var(--sub);">输入发卡网购买的授权码 (如 AG-VIP-XXXX):</label>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="input-license-key" placeholder="粘贴您的授权码 (AG-VIP-...)" style="flex:1; background:#070c17; border:1px solid var(--border); border-radius:6px; padding:9px; color:#fff; font-size:0.82rem; outline:none; min-width:0; font-family:monospace;">
+        <button class="btn btn-success" id="btn-activate-license" onclick="activateLicense()" style="flex-shrink:0;">立即激活</button>
+      </div>
+      <div style="font-size:0.7rem; color:var(--sub); margin-top:2px;">
+        💡 规则说明：每个授权码仅限绑定一个 Google 账号，激活后自动与该账号锁死，不可转借他人。
+      </div>
+    </div>
+  </div>
   <div id="tab-pane-stats" class="card" style="display:none;">
     <div class="card-title">
       <span>📈 Token 消耗与请求频次趋势</span>
@@ -357,7 +381,7 @@ function generateRandomApiKey() {
 }
 
 function switchTab(tabId) {
-  const tabs = ['quota', 'stats', 'test', 'agent', 'logs'];
+  const tabs = ['quota', 'license', 'stats', 'test', 'agent', 'logs'];
   tabs.forEach(t => {
     const pane = document.getElementById('tab-pane-' + t);
     if (pane) pane.style.display = (t === tabId) ? 'flex' : 'none';
@@ -433,6 +457,7 @@ claude`;
     if (data.active_account) {
       document.getElementById('current-active-account-btn').textContent = data.active_account.email.split('@')[0];
       document.getElementById('quota-email-label').textContent = data.active_account.email;
+      checkLicenseStatus(data.active_account.email);
     }
 
     renderAccountsList(data.accounts || [], data.active_account?.email);
@@ -450,7 +475,65 @@ claude`;
   } catch (e) {}
 }
 
-function renderAccountsList(accounts, activeEmail) {
+async function checkLicenseStatus(email) {
+  if (!email) return;
+  document.getElementById('lic-display-email').textContent = email;
+  try {
+    const res = await fetch('/api/license/check?email=' + encodeURIComponent(email) + '&_t=' + Date.now());
+    const data = await res.json();
+    const badge = document.getElementById('lic-status-badge');
+    const expireLabel = document.getElementById('lic-display-expire');
+
+    if (data.authorized) {
+      badge.textContent = `● VIP 有效 (剩 ${data.remainingDays} 天)`;
+      badge.className = 'badge';
+      expireLabel.textContent = `授权有效期至: ${data.expiresAt.substring(0, 10)} (授权码: ${data.code})`;
+      expireLabel.style.color = 'var(--success)';
+    } else {
+      badge.textContent = '● 未授权 / 已过期';
+      badge.className = 'badge danger';
+      expireLabel.textContent = data.reason || '尚未激活有效卡密';
+      expireLabel.style.color = 'var(--danger)';
+    }
+  } catch (e) {}
+}
+
+async function activateLicense() {
+  const code = document.getElementById('input-license-key').value.trim();
+  const email = document.getElementById('lic-display-email').textContent.trim();
+
+  if (!code) {
+    showToast('⚠ 请先输入授权码');
+    return;
+  }
+  if (!email || email === '--') {
+    showToast('⚠ 请先在账号管理中登录 Google 账号');
+    return;
+  }
+
+  const btn = document.getElementById('btn-activate-license');
+  btn.textContent = '激活中...';
+
+  try {
+    const res = await fetch('/api/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, email }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      showToast('🎉 ' + data.message);
+      document.getElementById('input-license-key').value = '';
+      checkLicenseStatus(email);
+    } else {
+      showToast('❌ ' + (data.message || '激活失败'));
+    }
+  } catch (e) {
+    showToast('❌ 网络错误，请重试');
+  } finally {
+    btn.textContent = '立即激活';
+  }
+}
   const c = document.getElementById('accounts-list-container');
   if (!accounts || accounts.length === 0) {
     c.innerHTML = '<div style="color:var(--sub);font-size:0.75rem;text-align:center;padding:6px;">账号池暂无账号</div>';
