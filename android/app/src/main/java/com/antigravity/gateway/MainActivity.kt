@@ -38,8 +38,7 @@ class MainActivity : AppCompatActivity() {
     private val PREFS_NAME = "antigravity_pro_prefs"
     private val KEY_GATEWAY_URL = "gateway_url"
     private val KEY_API_KEY = "gateway_api_key"
-    private val DEFAULT_CLOUD_URL = "https://antigravity-gateway-it14.onrender.com"
-    private val LOCAL_GATEWAY_URL = "http://127.0.0.1:8790"
+    private val DEFAULT_URL = "http://127.0.0.1:8790"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,7 +149,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun getGatewayUrl(): String {
         val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return sp.getString(KEY_GATEWAY_URL, DEFAULT_CLOUD_URL) ?: DEFAULT_CLOUD_URL
+        return sp.getString(KEY_GATEWAY_URL, DEFAULT_URL) ?: DEFAULT_URL
     }
 
     private fun getApiKey(): String {
@@ -255,7 +254,7 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("保存并连接") { _, _ ->
                 val uStr = urlInput.text.toString().trim()
                 val kStr = keyInput.text.toString().trim()
-                val targetUrl = if (uStr.isNotEmpty()) uStr else DEFAULT_CLOUD_URL
+                val targetUrl = if (uStr.isNotEmpty()) uStr else DEFAULT_URL
 
                 val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 sp.edit()
@@ -265,11 +264,8 @@ class MainActivity : AppCompatActivity() {
 
                 saveAndLoadUrl(targetUrl)
             }
-            .setNeutralButton("切回本地 8790") { _, _ ->
-                saveAndLoadUrl(LOCAL_GATEWAY_URL)
-            }
-            .setNegativeButton("切回免配置云端") { _, _ ->
-                saveAndLoadUrl(DEFAULT_CLOUD_URL)
+            .setNeutralButton("重置为 8790") { _, _ ->
+                saveAndLoadUrl(DEFAULT_URL)
             }
             .show()
     }
