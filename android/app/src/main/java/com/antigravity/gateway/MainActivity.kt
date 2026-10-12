@@ -564,13 +564,11 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val configText = """
-            # Antigravity Gateway 客户端配置
-            Base URL: $DEFAULT_GATEWAY_URL
-            API Key: $licenseKey
-            绑定的账号: $email
-            支持模型: gemini-3.8-flash-high, gemini-3.8-flash-fast, claude-sonnet-4-6
-        """.trimIndent()
+        val configText = "# Antigravity Gateway 客户端配置\n" +
+            "Base URL: $DEFAULT_GATEWAY_URL\n" +
+            "API Key: $licenseKey\n" +
+            "绑定的账号: $email\n" +
+            "支持模型: gemini-3.8-flash-high, gemini-3.8-flash-fast, claude-sonnet-4-6"
 
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val clip = android.content.ClipData.newPlainText("Antigravity Config", configText)
