@@ -416,7 +416,8 @@ class MainActivity : AppCompatActivity() {
                 OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
 
                 val responseCode = conn.responseCode
-                val reader = BufferedReader(InputStreamReader(if (responseCode == 200) conn.inputStream else conn.errorStream))
+                val stream = if (responseCode == 200) conn.inputStream else (conn.errorStream ?: conn.inputStream)
+                val reader = BufferedReader(InputStreamReader(stream))
                 val resp = reader.readText()
                 val json = JSONObject(resp)
 
@@ -478,7 +479,8 @@ class MainActivity : AppCompatActivity() {
                 OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
 
                 val responseCode = conn.responseCode
-                val reader = BufferedReader(InputStreamReader(if (responseCode == 200) conn.inputStream else conn.errorStream))
+                val stream = if (responseCode == 200) conn.inputStream else (conn.errorStream ?: conn.inputStream)
+                val reader = BufferedReader(InputStreamReader(stream))
                 val resp = reader.readText()
                 val json = JSONObject(resp)
 
