@@ -228,27 +228,27 @@
     </div>
   </div>
 
-  <!-- 选项卡 1.5：卡密激活与授权状态 (License Card) -->
+  <!-- 选项卡 1.5：卡密绑定与授权状态 (License Card) -->
   <div id="tab-pane-license" class="card" style="display:none; border-color:rgba(56, 189, 248, 0.4);">
     <div class="card-title">
-      <span>🔑 软件授权码与卡密激活 (一卡一号强绑定)</span>
-      <span class="badge" id="lic-status-badge">未激活</span>
+      <span>🔑 账号密钥绑定 (一密钥绑一账号)</span>
+      <span class="badge" id="lic-status-badge">未绑定</span>
     </div>
     
     <div style="background:#070c17; border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;">
-      <div style="font-size:0.75rem; color:var(--sub);">当前绑定 Google 账号:</div>
+      <div style="font-size:0.75rem; color:var(--sub);">当前 Google 账号:</div>
       <div id="lic-display-email" style="font-size:0.95rem; font-weight:700; color:#fff; margin-top:3px;">--</div>
-      <div style="font-size:0.72rem; color:var(--sub); margin-top:4px;" id="lic-display-expire">授权有效期: 尚未绑定有效卡密</div>
+      <div style="font-size:0.72rem; color:var(--sub); margin-top:4px;" id="lic-display-expire">尚未绑定有效密钥</div>
     </div>
 
     <div style="display:flex; flex-direction:column; gap:8px;">
-      <label style="font-size:0.75rem; color:var(--sub);">输入发卡网购买的授权码 (如 AG-VIP-XXXX):</label>
+      <label style="font-size:0.75rem; color:var(--sub);">输入您购买的专属密钥 (如 AG-XXXXXX):</label>
       <div style="display:flex; gap:6px;">
-        <input type="text" id="input-license-key" placeholder="粘贴您的授权码 (AG-VIP-...)" style="flex:1; background:#070c17; border:1px solid var(--border); border-radius:6px; padding:9px; color:#fff; font-size:0.82rem; outline:none; min-width:0; font-family:monospace;">
-        <button class="btn btn-success" id="btn-activate-license" onclick="activateLicense()" style="flex-shrink:0;">立即激活</button>
+        <input type="text" id="input-license-key" placeholder="粘贴专属密钥" style="flex:1; background:#070c17; border:1px solid var(--border); border-radius:6px; padding:9px; color:#fff; font-size:0.82rem; outline:none; min-width:0; font-family:monospace;">
+        <button class="btn btn-success" id="btn-activate-license" onclick="activateLicense()" style="flex-shrink:0;">绑定账号</button>
       </div>
       <div style="font-size:0.7rem; color:var(--sub); margin-top:2px;">
-        💡 规则说明：每个授权码仅限绑定一个 Google 账号，激活后自动与该账号锁死，不可转借他人。
+        💡 规则：一个密钥只绑定一个 Google 账号，绑定后永久独占，无法给其他账号复用。
       </div>
     </div>
   </div>
@@ -485,14 +485,14 @@ async function checkLicenseStatus(email) {
     const expireLabel = document.getElementById('lic-display-expire');
 
     if (data.authorized) {
-      badge.textContent = `● VIP 有效 (剩 ${data.remainingDays} 天)`;
+      badge.textContent = '● 已绑定生效';
       badge.className = 'badge';
-      expireLabel.textContent = `授权有效期至: ${data.expiresAt.substring(0, 10)} (授权码: ${data.code})`;
+      expireLabel.textContent = `已绑定密钥: ${data.key || '专属授权'}`;
       expireLabel.style.color = 'var(--success)';
     } else {
-      badge.textContent = '● 未授权 / 已过期';
+      badge.textContent = '● 未绑定';
       badge.className = 'badge danger';
-      expireLabel.textContent = data.reason || '尚未激活有效卡密';
+      expireLabel.textContent = data.reason || '尚未绑定有效密钥';
       expireLabel.style.color = 'var(--danger)';
     }
   } catch (e) {}

@@ -111,19 +111,19 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 1.8 商业卡密激活与鉴权接口
+  // 1.8 极简密钥绑定与查询接口
   if (url.pathname === '/api/license/activate' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => (body += chunk));
     req.on('end', () => {
       try {
         const { code, email } = JSON.parse(body);
-        const result = licenseManager.activateKey(code, email);
+        const result = licenseManager.bindKey(code, email);
         res.writeHead(result.ok ? 200 : 400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: false, message: '请求参数格式错误' }));
+        res.end(JSON.stringify({ ok: false, message: '参数格式错误' }));
       }
     });
     return;
