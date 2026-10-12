@@ -22,10 +22,22 @@ jobs:
           distribution: 'zulu'
           java-version: 17
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+          accept-android-sdk-licences: true
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
+
+      - name: Generate Gradle Wrapper
+        run: |
+          cd android
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
 
       - name: Bundle Android Assets
         run: |
@@ -35,7 +47,7 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          gradle assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
           mkdir -p ../dist
           cp app/build/outputs/apk/debug/*.apk ../dist/AntigravityGateway-Debug.apk
 
